@@ -55,6 +55,9 @@ int openSocket(char* port) {
         exit(1);
     }
 
+
+
+
     //Listen for connections
     if (listen(newSocket, 5) != 0) {
         perror("Listen: ");
@@ -102,7 +105,7 @@ int newRecvSocket(int listenSocket) {
  *  
  ********************************************************************************/
 void verifyConnection(int socketFD) {
-    char* code = "twobits\0";
+    char* code = "twobits\n";
     char* okay = "wecool\n";
     char* bye = "bye\n";
     char knockknock[512];
@@ -133,7 +136,6 @@ void verifyConnection(int socketFD) {
     }
     else {
         int bytesSent = send(socketFD, okay, sizeof(okay), 0);
-
         if (bytesSent < 0) {
             fprintf(stderr, "%s", "OTP_ENC_D: Unable to respond. Exiting.\n");
             return;
@@ -141,19 +143,28 @@ void verifyConnection(int socketFD) {
     }
 }
 
+//Helper function: After otp_enc connection verified, we receive
+//the filenames here. Parse them into variables. Then copy that
+//into the plaintext and cipher parameters passed into function.
 void getFilenames(char* plaintext, char* cipher, int socketFD) {
     char buffer[512];
     memset(buffer, '\0', 512);
+    char* tempText;
+    char* tempCipher;
 
     int bytesReceived = recv(socketFD, buffer, 512, 0);
+    printf("getfilenames received: %s\n", buffer);
 
     if (bytesReceived <= 0) {
         fprintf(stderr, "%s", "OTP_ENC_D GETFILENAMES: No message received. Exiting.\n");
         return;
     }
 
-    plaintext = strtok(buffer, ";");
-    cipher = strtok(NULL, ";");
+    tempText = strtok(buffer, ";");
+    tempCipher = strtok(NULL, ";");
+
+    strcpy(plaintext, tempText);
+    strcpy(cipher, tempCipher);
 
 }
 
@@ -272,17 +283,25 @@ int encodeSend(char* plaintext, char* cipher, int socket) {
     memset(buffer, '\0', 512);
     int bytesRead = 0;
     int totalBytesSent = 0;
+    int flagEOF = 0;    //Flip this when we hit EOF
 
-    while (totalBytesSent < fSize) { //Outer loop in charge of sending ENTIRE converted file
-        while (bytesRead < 512 || (t[0] = fgetc(text)) != EOF) { //Inner loop: convert 512 chars at time, then send
-            c[0] = fgetc(code);
-            if (t[0] == '\n') {
-                buffer[bytesRead] = '\n';
-                continue;
+    while (flagEOF != 1) { //Outer loop in charge of sending ENTIRE converted file
+        while (bytesRead < 512) {
+            if ((t[0] = fgetc(text)) == EOF) {
+                flagEOF = 1;
+                break; //Inner loop: convert 512 chars at time, then send
             }
             else {
-            buffer[bytesRead] = encode(t[0], c[0]);
-            bytesRead++;
+                c[0] = fgetc(code);
+                if (t[0] == '\n') {
+                    buffer[bytesRead] = '\n';
+                    continue;
+                }
+                else {
+                buffer[bytesRead] = encode(t[0], c[0]);
+                bytesRead++;
+                printf("send buffer: %s\n", buffer);
+                }
             }
         }
 
@@ -303,8 +322,9 @@ int encodeSend(char* plaintext, char* cipher, int socket) {
         }
         totalBytesSent += bytesSent;
         memset(buffer, '0', 512);
-        }
+    }
     //Done sending; close filestreams
+    printf("Transmission complete. Sent %d bytes.\n", totalBytesSent);
     fclose(text);
     fclose(code);
 }
@@ -313,7 +333,7 @@ int main(int argc, char** argv) {
 
     //Verify we have proper command line invocation
     if (argc != 2) {
-        printf("Usage: ftserver.c <port>\n");
+        printf("Usage: otp_enc_d <port>\n");
         exit(1);
     }
 
@@ -341,11 +361,18 @@ int main(int argc, char** argv) {
                 //Verify that incoming connection is valid (otp_enc only)
                 verifyConnection(recvSocket);
 
+                printf("Connection verified...\n");
+
                 char plaintext[128];    //For filename
                 char cipher[128];       //For filename
                 memset(plaintext, 0, 128);
                 memset(cipher, 0, 128);
+
+                printf("Get filenames...\n");
                 getFilenames(plaintext, cipher, recvSocket);
+                printf("Plaintext: %s\n", plaintext);
+                printf("Cipher: %s\n", cipher);
+                printf("Encode and send...\n");
                 encodeSend(plaintext, cipher, recvSocket);
                 break;
                 

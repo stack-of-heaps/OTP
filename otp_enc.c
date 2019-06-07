@@ -43,6 +43,33 @@ long getFileSize(char* file) {
 
 }
 
+//Simple function to receive encrypted message in 512-byte chunks.
+//Loops until we receive no more data. 
+//Closes the socket, prints message to stdout;
+void recvMessage(int socketFD) {
+    printf("in recv message\n");
+    char completeMessage[65536];
+    char rcvBuffer[512];
+    memset(completeMessage, '\0', 65536);
+    memset(rcvBuffer, '\0', 512);
+    int totalBytesReceived = 0;
+    int bytesReceived = 1;
+
+    while(1) {
+        bytesReceived = recv(socketFD, rcvBuffer, 512, 0);
+        if (bytesReceived <= 0) {
+            break;
+        }
+        else {
+            printf("recvbuffer: %s\n", rcvBuffer);
+            memset(rcvBuffer, '\0', 512);
+            totalBytesReceived += bytesReceived;
+        }
+    }
+
+    printf("%s", completeMessage);
+}
+
 int main(int argc, char** argv) {
 
     if (argc != 4) {
@@ -67,7 +94,6 @@ int main(int argc, char** argv) {
        char* secretMessage = "twobits\n";
 
        int talkSocket = newConnection(port);
-
        int bytesSent = send(talkSocket, secretMessage, strlen(secretMessage), 0);
 
        if (bytesSent < 0) {
@@ -75,22 +101,17 @@ int main(int argc, char** argv) {
            exit(2);
        }
 
-       printf("bytessent: %d\n", bytesSent);
-
        int bytesReceived = recv(talkSocket, recvBuffer, sizeof(recvBuffer), 0);
-
        if (bytesReceived < 0) {
            perror("Receive: ");
            exit(2);
        }
-       
-       printf("recvbuffer: %s\n", recvBuffer);
 
-       if (strcmp(recvBuffer, "wecool") != 0) {
+       if (strcmp(recvBuffer, "wecool\n") != 0) {
            exit(2);
        }
+        //If we are verified by otp_enc_d, send filenames 
        else {
-
             char sendBuffer[512];
             memset(sendBuffer, '\0', 512);
             char recvBuffer[512];
@@ -110,6 +131,9 @@ int main(int argc, char** argv) {
                 perror("Send: ");
                 exit(2);
             }
+
+            recvMessage(talkSocket);
+
             close(talkSocket);
        }
     }
