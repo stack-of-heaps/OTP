@@ -1,4 +1,4 @@
-#include "otp_enc_d.h";
+#include "otp_enc_d.h"
 
  /*******************************************************************************
   
@@ -34,31 +34,24 @@ int openSocket(char* port) {
     //Our "main" server, which will perpetually listen for connections
     struct addrinfo server, *res;      
     int serverPort;
-
     memset(&server, 0, sizeof server);
+
     server.ai_family = AF_INET;          //Setup for IPv4
     server.ai_socktype = SOCK_STREAM; //TCP
-    
-	//'Bind' our server to the current FLIP server	
 	server.ai_flags = AI_PASSIVE;
-	char hostbuffer[256];
-	gethostname(hostbuffer, sizeof(hostbuffer));
+    getaddrinfo("localhost", port, &server, &res);
 
-    getaddrinfo(hostbuffer, port, &server, &res);
-
-    int newSocket;
     //Create our socket
-    newSocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    int newSocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
     if (newSocket == -1) {
-        printf("Socket error");
-        fflush(stdout);
+        fprintf(stderr, "%s", "OTP_ENC_D: Socket Error\n");
         exit(1);
     }
 
     //Bind the socket
     if (bind(newSocket, res->ai_addr, res->ai_addrlen) != 0) {
-        perror("Socket binding: ");
+        fprintf(stderr, "%s", "OTP_ENC_D: Socket Binding\n");
         exit(1);
     }
 
@@ -67,9 +60,6 @@ int openSocket(char* port) {
         perror("Listen: ");
         exit(1);
     }
-
-    printf("Listening on %s\n", port);
-    fflush(stdout);
 
     return newSocket;
 }   
@@ -96,101 +86,168 @@ int newRecvSocket(int listenSocket) {
     socketIn = accept(listenSocket, (struct sockaddr*)&incoming_addr, &addr_size);
 
     if (socketIn == -1) {
-        printf("Response socket error\n ");
-        exit(1);
+        perror("Response socket error\n ");
+        return 0;
     }
 
     return socketIn;
 }
 
-
  /*******************************************************************************
  *
- * simple helper function to receive initial request from client.
- * Reads message into buffer from socket passed in to function
+ * Upon accepting a connection, our server needs to verify that whoever is contacting
+ * us should be allowed to. It analyzes the incoming message, which should include a port.
+ * If it rejects the message, it will respond with "bye". If it accepts, it will say "wecool,"
+ * and return the new "response socket" which we will use to send the encoded message back.
  *  
  ********************************************************************************/
-void recvMsg(int socketFD, char* buffer) {
+void verifyConnection(int socketFD) {
+    char* code = "twobits\0";
+    char* okay = "wecool\n";
+    char* bye = "bye\n";
+    char knockknock[512];
+    memset(knockknock, '\0', 512);
 
-    memset(buffer, '\0', 300);
-    int bytes = recv(socketFD, buffer, 299, 0);
-    
-    if (bytes < 0) {
-        perror("Socket read: ");
+    int bytesReceived = recv(socketFD, knockknock, 512, 0);
+
+    if (bytesReceived <= 0) {
+        fprintf(stderr, "%s", "OTP_ENC_D VERIFYCONNECTION: No message received. Exiting.\n");
+        return;
     }
 
-    return;
-}
+    char* handshake;
+    handshake = strtok(knockknock, ";");
+    printf("knockknock: %s\n", knockknock);
+    printf("handshake: %s\n", handshake);
 
- /*******************************************************************************
- *
- * When the client requests the pwd contents, this writes them to a buffer.
- * The buffer is initialized and passed in outside the function. this function
- * will not prevent buffer overruns.
- *  
- ********************************************************************************/
-void getDirContents(char* buffer) {
-   //Open current directory
-   DIR* dir = opendir(".");
-   struct dirent* dirContents = readdir(dir);
+    //If we don't receive the message "twobits", we don't accept the connection
+    if (strcmp(handshake, code) != 0) {
+        int bytesSent = send(socketFD, bye, sizeof(bye), 0);
 
-   char* fileIterator;
-   strcpy(buffer, "Available files: ");
-
-    //Iterate through all entities in the directory, excluding . and ..
-    while (dirContents != NULL) {
-    fileIterator = dirContents -> d_name;
-
-    if (strcmp(fileIterator, ".") != 0 && strcmp(fileIterator, "..") != 0) {
-        strcat(buffer, fileIterator);
-        strcat(buffer, ", ");
+        if (bytesSent < 0) {
+            fprintf(stderr, "%s", "OTP_ENC_D: Unable to respond on port.\n");
+            return;
+        }
+        close(socketFD);
+        return;
     }
-    dirContents = readdir(dir);
-    fileIterator = dirContents -> d_name;
-   }
+    else {
+        int bytesSent = send(socketFD, okay, sizeof(okay), 0);
 
-   //Remove comma at the end of string.
-   int length = strlen(buffer);
-   buffer[length - 2] = '.';
-}
- 
- /*******************************************************************************
- *
- * If the client sends a command unrecognized by the server, the server sends this response.
- * The response is sent to the socket passed in to the function.
- *  
- ********************************************************************************/
-
-void badCmdResponse(int socketFD) {
-    char* badCmd = "Invalid command. Please try again with -g or -l.\n";
-    int bytesSent = send(socketFD, badCmd, strlen(badCmd), 0);
-
-    if (bytesSent < 0) {
-        printf("Error sending badCmd message\n");
+        if (bytesSent < 0) {
+            fprintf(stderr, "%s", "OTP_ENC_D: Unable to respond. Exiting.\n");
+            return;
+        }
     }
 }
 
- /*******************************************************************************
- *
- * If the client requests a file which is not found in the pwd, the server sends this response.
- * The response is sent to the socket passed in to the function.
- *  
- ********************************************************************************/
-void badFileResponse(int socketFD) {
-    char* badCmd = "FILE NOT FOUND.\n";
-    int bytesSent = send(socketFD, badCmd, strlen(badCmd), 0);
+void getFilenames(char* plaintext, char* cipher, int socketFD) {
+    char buffer[512];
+    memset(buffer, '\0', 512);
+
+    int bytesReceived = recv(socketFD, buffer, 512, 0);
+
+    if (bytesReceived <= 0) {
+        fprintf(stderr, "%s", "OTP_ENC_D GETFILENAMES: No message received. Exiting.\n");
+        return;
+    }
+
+    plaintext = strtok(buffer, ";");
+    cipher = strtok(NULL, ";");
+
 }
 
-void sendResponse(int socketFD, char* msg) {
+int ASCIItoOrdinal(char letter) {
 
-    int bytesSent = send(socketFD, msg, strlen(msg), 0);
-
-    if (bytesSent < 0) {
-        printf("Error sending badCmd message\n");
+    switch (letter) {
+        case 'A':
+            return 1;
+        case 'B':
+            return 2;
+        case 'C':
+            return 3;
+        case 'D':
+            return 4;
+        case 'E':
+            return 5;
+        case 'F': 
+            return 6;
+        case 'G':
+            return 7;
+        case 'H':
+            return 8;
+        case 'I':
+            return 9;
+        case 'J':
+            return 10;
+        case 'K':
+            return 11;
+        case 'L':
+            return 12;
+        case 'M':
+            return 13;
+        case 'N':
+            return 14;
+        case 'O':
+            return 15;
+        case 'P':
+            return 16;
+        case 'Q':
+            return 17;
+        case 'R':
+            return 18;
+        case 'S':
+            return 19;
+        case 'T':
+            return 20;
+        case 'U':
+            return 21;
+        case 'V':
+            return 22;
+        case 'W':
+            return 23;
+        case 'X':
+            return 24;
+        case 'Y':
+            return 25;
+        case 'Z':
+            return 26;
+        case ' ':
+            return 27;
     }
 }
 
+int encode(int msg, int key) {
 
+    int convert = 0;
+    int msgVal = ASCIItoOrdinal(msg);
+    int keyVal = ASCIItoOrdinal(key);
+
+    convert = (msgVal + keyVal) % 27;
+    convert += 64; 
+
+    if (convert == 27) {
+        return 32;
+    }
+    else {
+        return convert;
+    }
+}
+
+//Helper function to determine size of file.
+//Used with OTP_ENC to determine if MESSAGE and CIPHER files are
+//of the same length. If not, they are invalid and the program quits.
+//Function returns filesize in LONG form
+long getFileSize(char* file) {
+
+    long fSize;
+    FILE* filePtr = fopen(file, "r");
+    fseek(filePtr, 0L, SEEK_END);
+    fSize = ftell(filePtr);
+    fclose(filePtr);
+    return fSize;
+
+}
  /*******************************************************************************
  *
  * When the client requests a file, this function confirms that the file exists.
@@ -200,55 +257,56 @@ void sendResponse(int socketFD, char* msg) {
  * //https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
  * //https://stackoverflow.com/questions/24259640/writing-a-full-buffer-using-write-system-call
  ********************************************************************************/
-int getSendFile(char* fileName, int socket) {
-    int foundFileFlag = 0;
-   //Open current directory
-   DIR* dir = opendir(".");
-   struct dirent* dirContents = readdir(dir);
+int encodeSend(char* plaintext, char* cipher, int socket) {
 
-   char* fileIterator;
-    //Iterate through all entities in the directory, excluding . and ..
-    //If we find the file, set a flag and break.
-    while (dirContents != NULL) {
+    //Get filesize
+    long fSize = getFileSize(plaintext);
 
-        fileIterator = dirContents -> d_name;
+    FILE* text = fopen(plaintext, "r");
+    FILE* code = fopen(cipher, "r");
+    char t[1];          //Holds char from text
+    char c[1];          //Holds char from code
+    char buffer[512];   //Holds current block of encrypted text
+    memset(t, 0, 1);
+    memset(c, 0, 1);
+    memset(buffer, '\0', 512);
+    int bytesRead = 0;
+    int totalBytesSent = 0;
 
-        if (strcmp(fileIterator, fileName) == 0) {
-            foundFileFlag = 1;
-            break;
+    while (totalBytesSent < fSize) { //Outer loop in charge of sending ENTIRE converted file
+        while (bytesRead < 512 || (t[0] = fgetc(text)) != EOF) { //Inner loop: convert 512 chars at time, then send
+            c[0] = fgetc(code);
+            if (t[0] == '\n') {
+                buffer[bytesRead] = '\n';
+                continue;
+            }
+            else {
+            buffer[bytesRead] = encode(t[0], c[0]);
+            bytesRead++;
+            }
         }
-        dirContents = readdir(dir);
-    }
 
-    long fSize = 0;
-    if (foundFileFlag == 1) {
-        //Get file size for when we write
-        FILE* filePtr = fopen(fileName, "r");
-        fseek(filePtr, 0L, SEEK_END);
-        fSize = ftell(filePtr);
-        fclose(filePtr);
-    
-        char buffer[4096];
-        //Read contents of file into buffer
-        int file = open(fileName, O_RDONLY);
+        //When we've finished with our conversion or we've hit 512 chars, 
+        //send the buffer
         size_t bytesSent = 0;
-        int bytesRead = 1;
-        printf("Sending file...\n");
-        while (bytesRead > 0) {
-            bytesRead = read(file, buffer, fSize);
-            bytesSent = write(socket, buffer, bytesRead);
-            //fSize -= bytesSent;
-            memset(buffer, 0, 4096);
+        int bytesRemaining = bytesRead;
+        printf("Sending encrypted text...\n");
+        while (bytesSent < bytesRead) {
+            bytesSent += send(socket, buffer, bytesRemaining, 0);
+            if (bytesSent < 0) {
+                perror("Error sending converted file.");
+                fclose(text);
+                fclose(code);
+                return 0;
+            }
+            bytesRemaining -= bytesSent;
         }
-    printf("File transfer complete.\n");
-    close(file);
-    return 0;
-    }
-    else {
-        printf("Unable to find file %s\n", fileName);
-        badFileResponse(socket);
-        return -5;
-    }
+        totalBytesSent += bytesSent;
+        memset(buffer, '0', 512);
+        }
+    //Done sending; close filestreams
+    fclose(text);
+    fclose(code);
 }
 
 int main(int argc, char** argv) {
@@ -259,109 +317,40 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    char rcvBuffer[65536];        //For incoming data
-
+    //Establish the server. Listen on port provided by user.
     char* serverPort = argv[1];
-
     int listenSocket = openSocket(serverPort);
 
     while(1) {
-        //We will receive data on this socket (courtesy of Beej's guide)
-        int recvSocket;
-        recvSocket = accept(listenSocket, NULL, NULL);
+        //We will accept connections in the parent process before passing off to the child.
+        int recvSocket = accept(listenSocket, NULL, NULL);
         if (recvSocket == -1) {
-            printf("Error on main server port\n");
+            fprintf(stderr, "%s", "Otp_Enc_D Accept: \n");
             continue;
         }
 
         pid_t childPID = fork();
 
         switch(childPID) {
-            //case -1: ;
-                //printf("Error forking.\n");
-                //exit(1);
-                //break;
+            case -1: ;
+                perror("Error forking.\n");
+                exit(1);
+                break;
 
             case 0: ;
-                //Receive command string from client
-                char buffer[1024];
-                memset(buffer, 0, 1024);
-                recvMsg(recvSocket, buffer);
+                //Verify that incoming connection is valid (otp_enc only)
+                verifyConnection(recvSocket);
 
-                //Parse command string
-                //If bad command, we return -1 from function and send "bad cmd" message
-                //If "-l", we return 3 and send directory
-                //If "-g", we return 6, get filename, and send file
-                //In all cases we get a port for the response
-                char* cmd = NULL;
-                char* port = NULL;
-                char* fileName = NULL;
-
-                cmd = strtok(buffer, ";");
+                char plaintext[128];    //For filename
+                char cipher[128];       //For filename
+                memset(plaintext, 0, 128);
+                memset(cipher, 0, 128);
+                getFilenames(plaintext, cipher, recvSocket);
+                encodeSend(plaintext, cipher, recvSocket);
+                break;
                 
-                if (cmd[1] == 'l') {
-                    printf("Client requests server send directory contents.\n");
-                    port = strtok(NULL, ";");
-                    //In this case, token2 is port
-                    //Establish our response connection using port sent by client
-                    int secondConnection;
-                    //secondConnection = openSocket(port);
-                    listenSocket = openSocket(port);
-
-                    struct sockaddr_storage inc_addr;
-                    socklen_t addr_sz;
-                    addr_sz = sizeof inc_addr;
-                    int sendSocket;
-
-                    //sendSocket = accept(secondConnection, (struct sockaddr*)&inc_addr, &addr_sz);
-                    sendSocket = accept(listenSocket, (struct sockaddr*)&inc_addr, &addr_sz);
-                    memset(buffer, 0, 1024);
-                    getDirContents(buffer);
-                    sendResponse(sendSocket, buffer);
-                    close(sendSocket);
-                    printf("Closing data connection\n");
-                }
-                
-                //File request
-                else if (cmd[1] == 'g') {
-                    printf("Client requests server send file.\n");
-                    //In this case, token2 is filename, token3 is port
-                    fileName = strtok(NULL, ";");
-                    port = strtok(NULL, ";");
-                    int secondConnection;
-                    secondConnection = openSocket(port);
-
-                    struct sockaddr_storage inc_addr;
-                    socklen_t addr_sz;
-                    addr_sz = sizeof inc_addr;
-                    int sendSocket;
-                    sendSocket = accept(secondConnection, (struct sockaddr*)&inc_addr, &addr_sz);
-
-                    getSendFile(fileName, sendSocket); 
-                    printf("Closing data connection\n");
-                    close(sendSocket);
-                    close(secondConnection);
-                    }
-
-                //Bad command
-                else {
-                    printf("Received bad command. Sending response\n");
-                    
-                    port = strtok(NULL, ";");
-                    int secondConnection;
-                    secondConnection = openSocket(port);
-
-                    struct sockaddr_storage inc_addr;
-                    socklen_t addr_sz;
-                    addr_sz = sizeof inc_addr;
-                    int sendSocket;
-
-                    sendSocket = accept(secondConnection, (struct sockaddr*)&inc_addr, &addr_sz);
-                    badCmdResponse(sendSocket);
-                    printf("Closing data connection\n");
-                }
-                
-                default: ;
+            default: ;
+                close(recvSocket);
                 struct sigaction sa;
                 sa.sa_handler = sigchld_handler; // reap all dead processes
                 sigemptyset(&sa.sa_mask);

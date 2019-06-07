@@ -14,15 +14,23 @@
 
 void sigchld_handler(int s);
 int openSocket(char* port);
-int newRecvSocket(int listenSocket)m
+int newRecvSocket(int listenSocket);
 void recvMsg(int socketFD, char* buffer);
-int parseMsg(char* bufferIn, char* fileName, char* port);
-void getDirContents(char* buffer);
-int getSendFile(char* fileName, int socket);
-void badCmdresponse(int socketFD);
-void badFileresponse(int socketFD);
+//SHARED
 int ASCIItoOrdinal(char letter);
+int newConnection(char* port);
+
+//OTP_ENC
+int newSocket(char* port);
+
+//OTP_ENC_D
+int encodeSend(char* msg, char* cipher, int socket);
+void verifyConnection(int socketFD);
 int encode(int msg, int key);
+void getFilenames(char* plaintext, char* cipher, int socketFD);
+
+//OTP_DEC_D
+void badFileresponse(int socketFD);
 int decode(int msg, int key);
 int modulo(int a, int b);
 
