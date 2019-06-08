@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
        char recvBuffer[512];
        memset(recvBuffer, '\0', 512);
        char* port = argv[3];
-       char* secretMessage = "twobits\n";
+       char* secretMessage = "shaveandahaircut\n";
 
        int talkSocket = newConnection(port);
        int bytesSent = send(talkSocket, secretMessage, strlen(secretMessage), 0);

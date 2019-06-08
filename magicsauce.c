@@ -69,16 +69,62 @@ long getFileSize(char* file) {
 }
 
  /*******************************************************************************
- *
+  * FOR OTP_ENC_D
  * Upon accepting a connection, our server needs to verify that whoever is contacting
  * us should be allowed to. It analyzes the incoming message, which should include a port.
  * If it rejects the message, it will respond with "bye". If it accepts, it will say "wecool,"
  * and return the new "response socket" which we will use to send the encoded message back.
- *  
  ********************************************************************************/
-void verifyConnection(int socketFD) {
+void verifyConnectionENC(int socketFD) {
     char* code = "twobits\n";
     char* okay = "wecool\n";
+    char* bye = "bye\n";
+    char knockknock[512];
+    memset(knockknock, '\0', 512);
+
+    int bytesReceived = recv(socketFD, knockknock, 512, 0);
+
+    if (bytesReceived <= 0) {
+        fprintf(stderr, "%s", "OTP_ENC_D VERIFYCONNECTION: No message received. Exiting.\n");
+        return;
+    }
+    
+    char* handshake;
+    handshake = strtok(knockknock, ";");
+    printf("knockknock: %s\n", knockknock);
+    printf("handshake: %s\n", handshake);
+
+    //If we don't receive the message "twobits", we don't accept the connection
+    if (strcmp(handshake, code) != 0) {
+        int bytesSent = send(socketFD, bye, sizeof(bye), 0);
+
+        if (bytesSent < 0) {
+            fprintf(stderr, "%s", "OTP_ENC_D: Unable to respond on port.\n");
+            return;
+        }
+        close(socketFD);
+        return;
+    }
+    else {
+        int bytesSent = send(socketFD, okay, sizeof(okay), 0);
+        if (bytesSent < 0) {
+            fprintf(stderr, "%s", "OTP_ENC_D: Unable to respond. Exiting.\n");
+            return;
+        }
+    }
+}
+
+
+ /*******************************************************************************
+  * FOR OTP_DEC_D
+ * Upon accepting a connection, our server needs to verify that whoever is contacting
+ * us should be allowed to. It analyzes the incoming message, which should include a port.
+ * If it rejects the message, it will respond with "bye". If it accepts, it will say "wecool,"
+ * and return the new "response socket" which we will use to send the encoded message back.
+ ********************************************************************************/
+void verifyConnectionDEC(int socketFD) {
+    char* code = "shaveandahaircut\n";
+    char* okay = "coolwe\n";
     char* bye = "bye\n";
     char knockknock[512];
     memset(knockknock, '\0', 512);
