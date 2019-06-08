@@ -11,15 +11,16 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
+#include <time.h>
 
 void sigchld_handler(int s);
 int openSocket(char* port);
 int newRecvSocket(int listenSocket);
-void recvMsg(int socketFD, char* buffer);
+void recvMessage(int socketFD);
 //SHARED
 int ASCIItoOrdinal(char letter);
 int newConnection(char* port);
+long getFileSize(char* file);
 
 //OTP_ENC
 int newSocket(char* port);

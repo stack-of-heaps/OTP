@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
             case 0: ;
                 //Verify that incoming connection is valid (otp_enc only)
-                verifyConnection(recvSocket);
+                verifyConnectionDEC(recvSocket);
 
                 char plaintext[128];    //For filename
                 char cipher[128];       //For filename
