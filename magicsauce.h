@@ -34,6 +34,7 @@ void getFilenames(char* plaintext, char* cipher, int socketFD);
 //OTP_DEC_D
 void badFileresponse(int socketFD);
 void verifyConnectionDEC(int socketFD);
+int decodeSend(char* msg, char* cipher, int socket);
 int decode(int msg, int key);
 int modulo(int a, int b);
 #endif

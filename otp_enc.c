@@ -76,9 +76,9 @@ int main(int argc, char** argv) {
             recvMessage(talkSocket);
 
             close(talkSocket);
+            exit(0);
        }
     }
-
 
     return 0;
 }

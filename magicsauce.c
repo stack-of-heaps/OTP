@@ -91,8 +91,6 @@ void verifyConnectionENC(int socketFD) {
     
     char* handshake;
     handshake = strtok(knockknock, ";");
-    printf("knockknock: %s\n", knockknock);
-    printf("handshake: %s\n", handshake);
 
     //If we don't receive the message "twobits", we don't accept the connection
     if (strcmp(handshake, code) != 0) {
@@ -138,8 +136,6 @@ void verifyConnectionDEC(int socketFD) {
 
     char* handshake;
     handshake = strtok(knockknock, ";");
-    printf("knockknock: %s\n", knockknock);
-    printf("handshake: %s\n", handshake);
 
     //If we don't receive the message "twobits", we don't accept the connection
     if (strcmp(handshake, code) != 0) {
@@ -171,7 +167,6 @@ void getFilenames(char* plaintext, char* cipher, int socketFD) {
     char* tempCipher;
 
     int bytesReceived = recv(socketFD, buffer, 512, 0);
-    printf("getfilenames received: %s\n", buffer);
 
     if (bytesReceived <= 0) {
         fprintf(stderr, "%s", "OTP_ENC_D GETFILENAMES: No message received. Exiting.\n");
@@ -212,23 +207,17 @@ int encodeSend(char* plaintext, char* cipher, int socket) {
     int flagEOF = 0;    //Flip this when we hit EOF
 
     while (flagEOF != 1) { //Outer loop in charge of sending ENTIRE converted file
-        while (bytesRead < 512) {
-            if ((t[0] = fgetc(text)) == EOF) {
+        while (bytesRead < 512 && flagEOF != 1) {
+            if ((t[0] = fgetc(text)) == EOF || t[0] == '\n') {
                 flagEOF = 1;
                 break; //Inner loop: convert 512 chars at time, then send
             }
             else {
                 c[0] = fgetc(code);
-                if (t[0] == '\n') {
-                    buffer[bytesRead] = '\n';
-                    continue;
-                }
-                else {
                 buffer[bytesRead] = encode(t[0], c[0]);
                 bytesRead++;
                 }
             }
-        }
 
         //When we've finished with our conversion or we've hit 512 chars, 
         //send the buffer
@@ -247,6 +236,7 @@ int encodeSend(char* plaintext, char* cipher, int socket) {
         totalBytesSent += bytesSent;
         memset(buffer, '0', 512);
     }
+
     //Done sending; close filestreams
     fclose(text);
     fclose(code);
@@ -300,7 +290,6 @@ int decodeSend(char* plaintext, char* cipher, int socket) {
         //send the buffer
         size_t bytesSent = 0;
         int bytesRemaining = bytesRead;
-        printf("Sending encrypted text...\n");
         while (bytesSent < bytesRead) {
             bytesSent += send(socket, buffer, bytesRemaining, 0);
             if (bytesSent < 0) {
@@ -315,7 +304,6 @@ int decodeSend(char* plaintext, char* cipher, int socket) {
         memset(buffer, '0', 512);
     }
     //Done sending; close filestreams
-    printf("Transmission complete. Sent %d bytes.\n", totalBytesSent);
     fclose(text);
     fclose(code);
 }
@@ -341,7 +329,6 @@ void sigchld_handler(int s)
 //Loops until we receive no more data. 
 //Closes the socket, prints message to stdout;
 void recvMessage(int socketFD) {
-    printf("in recv message\n");
     char completeMessage[65536];
     char rcvBuffer[512];
     memset(completeMessage, '\0', 65536);
@@ -355,12 +342,15 @@ void recvMessage(int socketFD) {
             break;
         }
         else {
-            printf("recvbuffer: %s\n", rcvBuffer);
+            strcat(completeMessage, rcvBuffer);
             memset(rcvBuffer, '\0', 512);
             totalBytesReceived += bytesReceived;
         }
+        break;
     }
 
+    //Append a '\n' char to the received message
+    strcat(completeMessage, "\n");
     printf("%s", completeMessage);
 }
  
@@ -415,59 +405,59 @@ int ASCIItoOrdinal(char letter) {
 
     switch (letter) {
         case 'A':
-            return 1;
+            return 0;
         case 'B':
-            return 2;
+            return 1;
         case 'C':
-            return 3;
+            return 2;
         case 'D':
-            return 4;
+            return 3;
         case 'E':
-            return 5;
+            return 4;
         case 'F': 
-            return 6;
+            return 5;
         case 'G':
-            return 7;
+            return 6;
         case 'H':
-            return 8;
+            return 7;
         case 'I':
-            return 9;
+            return 8;
         case 'J':
-            return 10;
+            return 9;
         case 'K':
-            return 11;
+            return 10;
         case 'L':
-            return 12;
+            return 11;
         case 'M':
-            return 13;
+            return 12;
         case 'N':
-            return 14;
+            return 13;
         case 'O':
-            return 15;
+            return 14;
         case 'P':
-            return 16;
+            return 15;
         case 'Q':
-            return 17;
+            return 16;
         case 'R':
-            return 18;
+            return 17;
         case 'S':
-            return 19;
+            return 18;
         case 'T':
-            return 20;
+            return 19;
         case 'U':
-            return 21;
+            return 20;
         case 'V':
-            return 22;
+            return 21;
         case 'W':
-            return 23;
+            return 22;
         case 'X':
-            return 24;
+            return 23;
         case 'Y':
-            return 25;
+            return 24;
         case 'Z':
-            return 26;
+            return 25;
         case ' ':
-            return 27;
+            return 26;
     }
 }
 
@@ -482,15 +472,15 @@ int encode(int msg, int key) {
     int msgVal = ASCIItoOrdinal(msg);
     int keyVal = ASCIItoOrdinal(key);
 
-    //If we have 0 after modulo, it's a space.
     convert = (msgVal + keyVal) % SIZE;
-    convert += 64; 
 
-    if (convert == 27) {
-        return 32;
+    convert += 65; 
+    //If 91, we have a space
+    if (convert == 91) {
+      return 32;
     }
     else {
-        return convert;
+      return convert;
     }
 }
 
@@ -509,13 +499,13 @@ int decode(int msg, int key) {
     offset = (msgVal - keyVal);
     convert = modulo(offset, SIZE);
 
-    //If we have 0 after modulo, it's a space.
-    if (convert == 0) {
-        return 32;
+    convert += 65; 
+    //If 91, we have a space
+    if (convert == 91) {
+      return 32;
     }
     else {
-        convert += 64; 
-        return convert;
+      return convert;
     }
 }
 

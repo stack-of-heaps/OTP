@@ -50,8 +50,7 @@ int main(int argc, char** argv) {
                 memset(cipher, 0, 128);
 
                 getFilenames(plaintext, cipher, recvSocket);
-                printf("Encode and send...\n");
-                encodeSend(plaintext, cipher, recvSocket);
+                decodeSend(plaintext, cipher, recvSocket);
                 break;
                 
             default: ;
