@@ -1,8 +1,13 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string.h>
+/*
+NAME: KYLE KARTHAUSER
+DATE: 6/7/19
+COURSE: CS344-400
+DESCRIPTION: Keygen.c takes one argument on the command line: length in the form of an integer.
+It returns a string of random characters A-Z and 'space' of the length requested by the user.
+At the end of the key there is a NEWLINE character.
+*/
 
+#include "magicsauce.h"
 
 int main(int argc, char** argv) {
 

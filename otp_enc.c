@@ -1,74 +1,16 @@
-#include "otp_enc_d.h"
-
-int newConnection(char* port) {
-
-    int newSocket;
-    struct addrinfo server, *res;      
-    memset(&server, 0, sizeof server);
-
-    server.ai_family = AF_INET;          //Setup for IPv4
-    server.ai_socktype = SOCK_STREAM; //TCP
-	server.ai_flags = AI_PASSIVE;
-    
-    getaddrinfo("localhost", port, &server, &res);
-
-    //Create our socket
-    newSocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-
-    if (newSocket == -1) {
-        perror("Socket creation: ");
-        exit(1);
-    }
-
-    if (connect(newSocket, res->ai_addr, res->ai_addrlen) < 0) {
-        perror("Connect: ");
-        exit(2);
-    }
-
-    return newSocket;
-}
-
-//Helper function to determine size of file.
-//Used with OTP_ENC to determine if MESSAGE and CIPHER files are
-//of the same length. If not, they are invalid and the program quits.
-//Function returns filesize in LONG form
-long getFileSize(char* file) {
-
-    long fSize;
-    FILE* filePtr = fopen(file, "r");
-    fseek(filePtr, 0L, SEEK_END);
-    fSize = ftell(filePtr);
-    fclose(filePtr);
-    return fSize;
-
-}
-
-//Simple function to receive encrypted message in 512-byte chunks.
-//Loops until we receive no more data. 
-//Closes the socket, prints message to stdout;
-void recvMessage(int socketFD) {
-    printf("in recv message\n");
-    char completeMessage[65536];
-    char rcvBuffer[512];
-    memset(completeMessage, '\0', 65536);
-    memset(rcvBuffer, '\0', 512);
-    int totalBytesReceived = 0;
-    int bytesReceived = 1;
-
-    while(1) {
-        bytesReceived = recv(socketFD, rcvBuffer, 512, 0);
-        if (bytesReceived <= 0) {
-            break;
-        }
-        else {
-            printf("recvbuffer: %s\n", rcvBuffer);
-            memset(rcvBuffer, '\0', 512);
-            totalBytesReceived += bytesReceived;
-        }
-    }
-
-    printf("%s", completeMessage);
-}
+//#include "otp_enc_d.h"
+#include "magicsauce.h"
+/*
+NAME: KYLE KARTHAUSER
+DATE: 6/7/19
+COURSE: CS344-400
+DESCRIPTION:  OTP_ENC.c facilitates communication between OTP_ENC_D.c. It's jobs are:
+1) Communicate with OTP_ENC_D server. 
+2) Verify that files passed in to command line are of the same size.
+3) Verify connection with OTP_ENC.
+4) Transmit filenames of MESSAGE and KEY to OTP_ENC_D.
+5) Receive final encrypted message, outputting to stdout.
+*/
 
 int main(int argc, char** argv) {
 
