@@ -14,6 +14,58 @@ DESCRIPTION:  OTP_ENC_D.c is the "decoding server" in this batch of files. It's 
 
 int main(int argc, char** argv) {
 
+    //Verify we have proper command line invocation
+    if (argc != 2) {
+        printf("Usage: otp_dec_d <port>\n");
+        exit(1);
+    }
 
-   return 0; 
+    //Establish the server. Listen on port provided by user.
+    char* serverPort = argv[1];
+    int listenSocket = openSocket(serverPort);
+
+    while(1) {
+        //We will accept connections in the parent process before passing off to the child.
+        int recvSocket = accept(listenSocket, NULL, NULL);
+        if (recvSocket == -1) {
+            fprintf(stderr, "%s", "Otp_Dec_D Accept: \n");
+            continue;
+        }
+
+        pid_t childPID = fork();
+
+        switch(childPID) {
+            case -1: ;
+                perror("Error forking.\n");
+                exit(1);
+                break;
+
+            case 0: ;
+                //Verify that incoming connection is valid (otp_enc only)
+                verifyConnection(recvSocket);
+
+                char plaintext[128];    //For filename
+                char cipher[128];       //For filename
+                memset(plaintext, 0, 128);
+                memset(cipher, 0, 128);
+
+                getFilenames(plaintext, cipher, recvSocket);
+                printf("Encode and send...\n");
+                encodeSend(plaintext, cipher, recvSocket);
+                break;
+                
+            default: ;
+                close(recvSocket);
+                struct sigaction sa;
+                sa.sa_handler = sigchld_handler; // reap all dead processes
+                sigemptyset(&sa.sa_mask);
+                sa.sa_flags = SA_RESTART;
+                if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+                    perror("sigaction");
+                    exit(1);
+                }
+            }
+        }
+
+    return 0;
 }

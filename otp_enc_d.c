@@ -45,18 +45,12 @@ int main(int argc, char** argv) {
                 //Verify that incoming connection is valid (otp_enc only)
                 verifyConnection(recvSocket);
 
-                printf("Connection verified...\n");
-
                 char plaintext[128];    //For filename
                 char cipher[128];       //For filename
                 memset(plaintext, 0, 128);
                 memset(cipher, 0, 128);
 
-                printf("Get filenames...\n");
                 getFilenames(plaintext, cipher, recvSocket);
-                printf("Plaintext: %s\n", plaintext);
-                printf("Cipher: %s\n", cipher);
-                printf("Encode and send...\n");
                 encodeSend(plaintext, cipher, recvSocket);
                 break;
                 

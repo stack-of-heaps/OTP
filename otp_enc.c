@@ -19,7 +19,6 @@ int main(int argc, char** argv) {
         exit(2);
     }
     else {
-
         //Check if message and cipher files specified in cmd line are of same size.
         //If not, quit.
        long msgSize = getFileSize(argv[1]);

@@ -180,7 +180,72 @@ int encodeSend(char* plaintext, char* cipher, int socket) {
                 else {
                 buffer[bytesRead] = encode(t[0], c[0]);
                 bytesRead++;
-                printf("send buffer: %s\n", buffer);
+                }
+            }
+        }
+
+        //When we've finished with our conversion or we've hit 512 chars, 
+        //send the buffer
+        size_t bytesSent = 0;
+        int bytesRemaining = bytesRead;
+        while (bytesSent < bytesRead) {
+            bytesSent += send(socket, buffer, bytesRemaining, 0);
+            if (bytesSent < 0) {
+                perror("Error sending converted file.");
+                fclose(text);
+                fclose(code);
+                return 0;
+            }
+            bytesRemaining -= bytesSent;
+        }
+        totalBytesSent += bytesSent;
+        memset(buffer, '0', 512);
+    }
+    //Done sending; close filestreams
+    fclose(text);
+    fclose(code);
+}
+
+ /*******************************************************************************
+ * When the client requests a file, this function confirms that the file exists.
+ * If it does not, it sends an error FILE NOT FOUND.
+ * If file is found, server sends the file to the socket passed in to the function.
+ *  
+ * //https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
+ * //https://stackoverflow.com/questions/24259640/writing-a-full-buffer-using-write-system-call
+ ********************************************************************************/
+int decodeSend(char* plaintext, char* cipher, int socket) {
+
+    //Get filesize
+    long fSize = getFileSize(plaintext);
+
+    FILE* text = fopen(plaintext, "r");
+    FILE* code = fopen(cipher, "r");
+    char t[1];          //Holds char from text
+    char c[1];          //Holds char from code
+    char buffer[512];   //Holds current block of encrypted text
+    memset(t, 0, 1);
+    memset(c, 0, 1);
+    memset(buffer, '\0', 512);
+    int bytesRead = 0;
+    int totalBytesSent = 0;
+    int flagEOF = 0;    //Flip this when we hit EOF
+
+    while (flagEOF != 1) { //Outer loop in charge of sending ENTIRE converted file
+        while (bytesRead < 512) {
+            if ((t[0] = fgetc(text)) == EOF) {
+                flagEOF = 1;
+                break; //Inner loop: convert 512 chars at time, then send
+            }
+            else {
+                c[0] = fgetc(code);
+                if (t[0] == '\n') {
+                    buffer[bytesRead] = '\n';
+                    continue;
+                }
+                else {
+                buffer[bytesRead] = decode(t[0], c[0]);
+                bytesRead++;
                 }
             }
         }
