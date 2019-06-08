@@ -26,12 +26,13 @@ int newSocket(char* port);
 
 //OTP_ENC_D
 int encodeSend(char* msg, char* cipher, int socket);
-void verifyConnection(int socketFD);
+void verifyConnectionENC(int socketFD);
 int encode(int msg, int key);
 void getFilenames(char* plaintext, char* cipher, int socketFD);
 
 //OTP_DEC_D
 void badFileresponse(int socketFD);
+void verifyConnectionDEC(int socketFD);
 int decode(int msg, int key);
 int modulo(int a, int b);
 #endif
